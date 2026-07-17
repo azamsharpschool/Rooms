@@ -173,7 +173,8 @@ class RoomSyncManager {
     
     
     func start(container: ModelContainer) throws {
-        observer = try HistoryObserver(observedModels: [Room.self], modelContainer: container)
+        
+        observer = try HistoryObserver(observedModels: [Room.self], authors: ["App"] ,modelContainer: container)
         
         token = withContinuousObservation(options: .didSet) { [weak self] event in
             print("Observation Fired...")
@@ -190,6 +191,7 @@ class RoomSyncManager {
         let descriptor: HistoryDescriptor<DefaultHistoryTransaction>
         
         if let lastToken = lastToken {
+            
             descriptor = HistoryDescriptor<DefaultHistoryTransaction>(predicate: #Predicate {
                 transaction in transaction.token > lastToken
             })
@@ -240,27 +242,33 @@ class RoomSyncManager {
             // call the syncService.uploadRooms
             if !payloadsToSync.isEmpty {
                 
+                let container = context.container
+                
                 Task {
                     do {
                         print("syncService.uploadRooms")
                         try await syncService.uploadRooms(payloads: payloadsToSync)
                         
-                        if let latestToken = history.last?.token {
-                            self.lastToken = latestToken
-                        }
-                        
                         // clean up the deleted Ids
                         let deletedIds = payloadsToSync.filter { $0.action == .delete }.map { $0.id }
                         
                         if !deletedIds.isEmpty {
+                            
                             do {
-                                try context.delete(model: Room.self, where: #Predicate { room in
+                                // create SyncContext with different author and then remove the Room
+                                let syncContext = ModelContext(container)
+                                syncContext.author = "Sync"
+                                try syncContext.delete(model: Room.self, where: #Predicate { room in
                                     deletedIds.contains(room.syncId)
                                 })
-                                try context.save()
+                                try syncContext.save()
                             } catch {
                                 print(error.localizedDescription)
                             }
+                        }
+                        
+                        if let latestToken = history.last?.token {
+                            self.lastToken = latestToken
                         }
                         
                         isSyncing = false
