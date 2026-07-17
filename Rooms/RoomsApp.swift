@@ -16,7 +16,6 @@ struct RoomsApp: App {
     
     init() {
         container = try! ModelContainer(for: Room.self, configurations: ModelConfiguration(isStoredInMemoryOnly: false))
-        container.mainContext.author = "App"
         roomSyncManager = RoomSyncManager()
         startRoomSync()
     }
@@ -33,6 +32,10 @@ struct RoomsApp: App {
         WindowGroup {
             RoomListScreen()
                 .modelContainer(container)
+                .task {
+                    container.mainContext.author = "App"
+                }
+            
         }
     }
 }
